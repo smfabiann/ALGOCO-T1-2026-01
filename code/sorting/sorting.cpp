@@ -40,6 +40,17 @@ struct IterationMetrics {
     long delta_peak_from_start_kb;
 };
 
+IterationMetrics invalid_metrics() {
+    IterationMetrics m;
+    m.time_ms = -1.0;
+    m.rss_before_kb = -1;
+    m.rss_after_kb = -1;
+    m.delta_rss_kb = -1;
+    m.peak_kb = -1;
+    m.delta_peak_from_start_kb = -1;
+    return m;
+}
+
 void guardar_arreglo(const vector<int>& arr, const string& outfilename) {
     ofstream outarr("data/array_output/" + outfilename);
     for (size_t i = 0; i < arr.size(); ++i) {
@@ -69,7 +80,7 @@ IterationMetrics run_iteration_isolated(
     const vector<int>& input_arr,
     const string& outfilename
 ) {
-    IterationMetrics metrics{};
+    IterationMetrics metrics = invalid_metrics();
     int pipefd[2];
     if (pipe(pipefd) == -1) {
         cerr << "Error al crear pipe para la medicion." << endl;
@@ -86,6 +97,14 @@ IterationMetrics run_iteration_isolated(
 
     if (pid == 0) {
         close(pipefd[0]);
+
+        // Intenta usar el maximo stack permitido para reducir fallos por recursividad.
+        struct rlimit stack_limits {};
+        if (getrlimit(RLIMIT_STACK, &stack_limits) == 0 &&
+            stack_limits.rlim_cur < stack_limits.rlim_max) {
+            stack_limits.rlim_cur = stack_limits.rlim_max;
+            setrlimit(RLIMIT_STACK, &stack_limits);
+        }
 
         vector<int> arr = input_arr;
         long rss_before = get_current_rss_kb();
@@ -130,8 +149,14 @@ IterationMetrics run_iteration_isolated(
     waitpid(pid, &status, 0);
 
     if (read_bytes != sizeof(metrics) || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        cerr << "Fallo al medir la iteracion en proceso aislado." << endl;
-        metrics = {};
+        cerr << "Fallo al medir la iteracion en proceso aislado.";
+        if (WIFSIGNALED(status)) {
+            cerr << " Senal: " << WTERMSIG(status);
+        } else if (WIFEXITED(status)) {
+            cerr << " Exit code: " << WEXITSTATUS(status);
+        }
+        cerr << endl;
+        metrics = invalid_metrics();
     }
 
     return metrics;

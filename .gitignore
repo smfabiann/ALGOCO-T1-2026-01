@@ -7,3 +7,14 @@ code/matrix_multiplication/matrix_multiplication.o
 code/sorting/data/array_input
 code/sorting/data/array_output
 code/sorting/sorting
+
+
+code/sorting/.venv
+
+report/report.aux
+report/report.bbl
+report/report.bcf
+report/report.fdb_latexmk
+report/report.fls
+report/report.log
+report/report.synctex.gz
